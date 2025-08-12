@@ -36,7 +36,7 @@ def check_env():
 
 def collect_github_issues(token):
     """
-    Fetch issues from the same repo used in gh_access, but without changing gh_access.
+    Fetch issues from the same repo used in gh_access
     Returns list of dicts: {number, title, state}
     """
     g = Github(token)

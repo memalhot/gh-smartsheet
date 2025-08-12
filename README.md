@@ -1,8 +1,22 @@
 # gh-smartsheet
 
+To run start a venv:
+```
 source venv/bin/activate
-1. To use the script, you must first have both a github token and smartsheet token.
+pip -r requirements.txt
+```
 
-export GH_TOKEN=''
+1. To use the script, you must first have both a github token, smartsheet token and smartsheet id.
+   Create a .env file in this repository with the variables:
+   
+   ```
+   GITHUB_TOKEN=
+   SMARTSHEET_TOKEN=
+   SMARTSHEET_SHEET_ID=
+   ```
 
-export SMARTSHEET_TOKEN=''
+2. Run the script:
+
+    ```
+    python3 gh-smartsheet.py
+    ```
