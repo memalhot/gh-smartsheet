@@ -1,6 +1,7 @@
 # gh-smartsheet
 
-To run start a venv:
+Clone and cd into this repo and once in the directory, start a venv.
+To start a venv:
 ```
 source venv/bin/activate
 pip -r requirements.txt

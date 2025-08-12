@@ -65,6 +65,44 @@ def sm_headers(token):
         "Content-Type": "application/json"
     }
 
+def fetch_all_rows(sheet_id, token):
+    """Return all rows for the sheet (handles pagination via includeAll)."""
+    url = f"https://api.smartsheet.com/2.0/sheets/{sheet_id}"
+    resp = requests.get(url, headers=sm_headers(token), params={"includeAll": "true"})
+    resp.raise_for_status()
+    return resp.json().get("rows", [])
+
+def build_sheet_index(rows, col_ids):
+    """
+    Build a lookup: (issue_number, title) -> {"rowId": <id>, "status": <value or displayValue>}
+    """
+    id_issue  = col_ids["Issue Number"]
+    id_title  = col_ids["Title"]
+    id_status = col_ids["Status"]
+
+    def cell_value(cell):
+        return cell.get("value", cell.get("displayValue"))
+
+    index = {}
+    for row in rows:
+        num = title = status = None
+        for c in row.get("cells", []):
+            cid = c.get("columnId")
+            if cid == id_issue:
+                num = cell_value(c)
+            elif cid == id_title:
+                title = cell_value(c)
+            elif cid == id_status:
+                status = cell_value(c)
+
+        if num is not None and title is not None:
+            # Normalize number key to int when possible
+            try:
+                num_key = int(num)
+            except (TypeError, ValueError):
+                num_key = str(num)
+            index[(num_key, str(title))] = {"rowId": row["id"], "status": status}
+    return index
 
 def fetch_smartsheet(sheet_id, token):
     """
@@ -124,36 +162,60 @@ def get_or_create_columns(sheet_id, token):
 
 def add_issue_rows(sheet_id, token, issues, col_ids, batch_size=300):
     """
-    Append rows to the sheet with Issue Number, Title, Status.
-    issues: iterable of dicts with keys: number (int), title (str), state (str)
+    Add new issues as rows if (issue number + title) not present.
+    If present and status differs, update the Status cell in place.
     """
     def chunk(seq, n):
         for i in range(0, len(seq), n):
             yield seq[i:i+n]
 
-    rows = []
+    # Build current index of rows -> (issue number, title)
+    existing_rows = fetch_all_rows(sheet_id, token)
+    index = build_sheet_index(existing_rows, col_ids)
+
+    to_add = []
+    to_update = []
+
     for it in issues:
-        rows.append({
-            #"toBottom": True,
-            "cells": [
-                {"columnId": col_ids["Issue Number"], "value": it["number"]},
-                {"columnId": col_ids["Title"],        "value": it["title"]},
-                {"columnId": col_ids["Status"],       "value": it["state"]},
-            ]
-        })
+        key = (it["number"], it["title"])
+        current = index.get(key)
 
-    if not rows:
-        print("No issues to add to Smartsheet.")
-        return
+        if current is None:
+            # Not found -> add new row
+            to_add.append({
+                #"toBottom": True,
+                "cells": [
+                    {"columnId": col_ids["Issue Number"], "value": it["number"]},
+                    {"columnId": col_ids["Title"],        "value": it["title"]},
+                    {"columnId": col_ids["Status"],       "value": it["state"]},
+                ]
+            })
+        else:
+            # Found -> update status only if it changed (or missing)
+            existing_status = current.get("status")
+            if str(existing_status).lower() != str(it["state"]).lower():
+                to_update.append({
+                    "id": current["rowId"],
+                    "cells": [
+                        {"columnId": col_ids["Status"], "value": it["state"]}
+                    ]
+                })
 
-    url = f"https://api.smartsheet.com/2.0/sheets/{sheet_id}/rows"
-    # Smartsheet expects an array of row objects in the body.
-    for group in chunk(rows, batch_size):
-        r = requests.post(url, headers=sm_headers(token), json=group)
-        r.raise_for_status()
+    # Apply adds
+    if to_add:
+        url = f"https://api.smartsheet.com/2.0/sheets/{sheet_id}/rows"
+        for group in chunk(to_add, batch_size):
+            r = requests.post(url, headers=sm_headers(token), json=group)
+            r.raise_for_status()
 
-    print(f"Added {len(rows)} rows to Smartsheet sheet {sheet_id}.")
+    # Apply updates
+    if to_update:
+        url = f"https://api.smartsheet.com/2.0/sheets/{sheet_id}/rows"
+        for group in chunk(to_update, batch_size):
+            r = requests.put(url, headers=sm_headers(token), json=group)
+            r.raise_for_status()
 
+    print(f"Smartsheet sync complete. Added {len(to_add)} new rows, updated {len(to_update)} statuses.")
 
 # -----------------------------
 # main
