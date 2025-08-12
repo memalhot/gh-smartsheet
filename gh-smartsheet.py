@@ -3,6 +3,27 @@ import os
 import sys
 from github import Github
 import requests
+from dotenv import load_dotenv
+
+
+def check_env():
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+    SMARTSHEET_TOKEN = os.getenv("SMARTSHEET_TOKEN")
+    SMARTSHEET_SHEET_ID = os.getenv("SMARTSHEET_SHEET_ID")
+
+    # Optional: validate presence
+    missing = [k for k, v in {
+        "GITHUB_TOKEN": GITHUB_TOKEN,
+        "SMARTSHEET_TOKEN": SMARTSHEET_TOKEN,
+        "SMARTSHEET_SHEET_ID": SMARTSHEET_SHEET_ID
+    }.items() if not v]
+
+    if missing:
+        print(f"Error: missing in .env -> {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+
 
 def fetch_smartsheet(sheet_id, token):
     """
@@ -54,7 +75,7 @@ def main():
 
     gh_access()
     sheet = sm_access()
-    
+
     # Print out a summary of the sheet
     name = sheet.get("name", "<unnamed>")
     row_count = sheet.get("totalRowCount", "unknown")
