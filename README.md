@@ -1,4 +1,5 @@
 # gh-smartsheet
+The purpose of this script is to sync github issues with Smartsheet for project management tracking.
 
 Clone and cd into this repo and once in the directory, start a venv.
 To start a venv:
